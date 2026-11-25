@@ -17,6 +17,8 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Sum, Count, F, Q
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_http_methods
 
 from .models import (
     PerfilUsuario,
@@ -77,9 +79,21 @@ def requiere_roles(*roles_permitidos):
     return decorator
 
 
+def _safe_redirect_url(request, candidate: str, fallback: str) -> str:
+    """Valida redirecciones internas para mitigar Open Redirect (CWE-601)."""
+    if candidate and url_has_allowed_host_and_scheme(
+        url=candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return candidate
+    return fallback
+
+
 # ==============================================================================
 # 1. AUTENTICACIÓN, SESIONES Y CAMBIO RÁPIDO DE ROL DEMO
 # ==============================================================================
+@require_http_methods(['GET', 'POST'])
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
@@ -92,7 +106,7 @@ def login_view(request):
             login(request, user)
             nombre = user.get_full_name() or user.username
             messages.success(request, f"¡Bienvenido(a) a Dulce Arte, {nombre}! Sesión iniciada correctamente.")
-            next_url = request.GET.get('next') or 'dashboard'
+            next_url = _safe_redirect_url(request, request.GET.get('next', ''), 'dashboard')
             return redirect(next_url)
         else:
             messages.error(request, "Credenciales incorrectas. Verifica tu usuario y contraseña.")
@@ -101,6 +115,7 @@ def login_view(request):
     return render(request, 'gestion_pasteleria/login.html', {'usuarios_demo': usuarios_demo})
 
 
+@require_http_methods(['GET', 'POST'])
 @login_required
 def logout_view(request):
     logout(request)
@@ -108,32 +123,33 @@ def logout_view(request):
     return redirect('login')
 
 
+@require_http_methods(['POST'])
 @login_required
 def cambiar_rol_demo_view(request):
     """
     Permite durante la defensa académica cambiar rápidamente el rol operativo
     de la sesión actual para demostrar los permisos de Ventas, Cocina, Bodega, Logística y Admin.
     """
-    if request.method == 'POST':
-        nuevo_rol = request.POST.get('rol', 'ADMIN')
-        roles_validos = dict(PerfilUsuario.ROL_CHOICES)
-        if nuevo_rol in roles_validos:
-            perfil, _ = PerfilUsuario.objects.get_or_create(usuario=request.user)
-            perfil.rol = nuevo_rol
-            perfil.save(update_fields=['rol'])
-            messages.success(
-                request,
-                f"Rol de sesión actualizado a: {roles_validos[nuevo_rol]}.",
-            )
-            referer = request.META.get('HTTP_REFERER', '')
-            if nuevo_rol != 'ADMIN' and '/administracion' in referer:
-                return redirect('dashboard')
-    return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+    nuevo_rol = request.POST.get('rol', 'ADMIN')
+    roles_validos = dict(PerfilUsuario.ROL_CHOICES)
+    if nuevo_rol in roles_validos:
+        perfil, _ = PerfilUsuario.objects.get_or_create(usuario=request.user)
+        perfil.rol = nuevo_rol
+        perfil.save(update_fields=['rol'])
+        messages.success(
+            request,
+            f"Rol de sesión actualizado a: {roles_validos[nuevo_rol]}.",
+        )
+        referer_raw = request.META.get('HTTP_REFERER', '')
+        if nuevo_rol != 'ADMIN' and '/administracion' in referer_raw:
+            return redirect('dashboard')
+    return redirect(_safe_redirect_url(request, request.META.get('HTTP_REFERER', ''), 'dashboard'))
 
 
 # ==============================================================================
 # 2. DASHBOARD PRINCIPAL END-TO-END (VISTA DE PROCESOS Y ESCENARIOS 4+1)
 # ==============================================================================
+@require_http_methods(['GET', 'HEAD'])
 @login_required
 def dashboard_view(request):
     total_pedidos = PedidoPersonalizado.objects.count()
@@ -869,7 +885,11 @@ def inventario_bom_view(request):
             prod_obj = get_object_or_404(ProductoPasteleria, pk=request.POST.get('producto_id'))
             cliente_id = request.POST.get('cliente_id')
             nuevo_cliente_txt = (request.POST.get('nuevo_cliente_nombre') or '').strip()
-            next_url = request.POST.get('next_url') or '/bodega/bom/?tab=recetas'
+            next_url = _safe_redirect_url(
+                request,
+                request.POST.get('next_url', ''),
+                '/bodega/bom/?tab=recetas',
+            )
             try:
                 cantidad_venta = max(1, int(request.POST.get('cantidad_venta', prod_obj.porciones_base) or 1))
             except Exception:
@@ -1205,6 +1225,7 @@ def administracion_unificada_view(request):
 # ==============================================================================
 # MANEJADOR DE ERROR PERSONALIZADO 404 (PÁGINA NO ENCONTRADA)
 # ==============================================================================
+@require_http_methods(['GET', 'POST', 'HEAD'])
 def error_404_view(request, exception=None):
     """
     Vista personalizada para el manejo de errores HTTP 404 (Página No Encontrada).

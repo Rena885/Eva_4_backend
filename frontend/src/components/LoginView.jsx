@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Lock, User, Server, ShieldCheck } from 'lucide-react'
-import { getApiBaseUrl, loginWithJwt, setApiBaseUrlOverride } from '../services/api'
+import { getApiBaseUrl, loginWithJwt } from '../services/api'
 
 const DEMO_USERS = [
   { username: 'admin', label: 'Admin General' },
@@ -13,17 +13,15 @@ const DEMO_USERS = [
 export default function LoginView({ onSuccess }) {
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
-  const [apiUrl, setApiUrl] = useState(getApiBaseUrl())
-  const [showApiConfig, setShowApiConfig] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const apiUrl = getApiBaseUrl()
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      setApiBaseUrlOverride(apiUrl)
       const session = await loginWithJwt(username.trim(), password)
       onSuccess(session)
     } catch (err) {
@@ -111,30 +109,9 @@ export default function LoginView({ onSuccess }) {
             </div>
           </div>
 
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => setShowApiConfig((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-xs text-stone-600 hover:text-stone-900"
-            >
-              <Server className="w-3.5 h-3.5" />
-              {showApiConfig ? 'Ocultar endpoint API Gateway' : `API Endpoint: ${apiUrl}`}
-            </button>
-
-            {showApiConfig && (
-              <div className="mt-2">
-                <label className="block text-xs font-medium text-stone-600 mb-1">
-                  URL Base Backend / API Gateway
-                </label>
-                <input
-                  type="url"
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-stone-300 rounded-lg text-xs font-mono"
-                  placeholder="https://xxxx.execute-api.us-east-1.amazonaws.com"
-                />
-              </div>
-            )}
+          <div className="pt-1 flex items-center gap-1.5 text-xs text-stone-500 font-mono">
+            <Server className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">API: {apiUrl}</span>
           </div>
 
           <button

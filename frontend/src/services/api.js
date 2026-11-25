@@ -3,20 +3,16 @@ const DEFAULT_API_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:
 const STORAGE_ACCESS = 'dulce_arte_jwt_access'
 const STORAGE_REFRESH = 'dulce_arte_jwt_refresh'
 const STORAGE_USER = 'dulce_arte_jwt_user'
-const STORAGE_API_OVERRIDE = 'dulce_arte_api_override'
 
 export function getApiBaseUrl() {
-  const override = localStorage.getItem(STORAGE_API_OVERRIDE)
-  return (override || DEFAULT_API_URL).replace(/\/+$/, '')
+  return DEFAULT_API_URL
 }
 
-export function setApiBaseUrlOverride(url) {
-  const clean = (url || '').trim().replace(/\/+$/, '')
-  if (!clean) {
-    localStorage.removeItem(STORAGE_API_OVERRIDE)
-  } else {
-    localStorage.setItem(STORAGE_API_OVERRIDE, clean)
+function buildApiUrl(path) {
+  if (typeof path !== 'string' || !path.startsWith('/api/v1/')) {
+    throw new Error('Ruta de API no permitida.')
   }
+  return new URL(path, `${DEFAULT_API_URL}/`).toString()
 }
 
 export function getStoredSession() {
@@ -68,7 +64,7 @@ async function refreshAccessToken() {
   const { refresh } = getStoredSession()
   if (!refresh) return null
 
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/auth/token/refresh/`, {
+  const res = await fetch(buildApiUrl('/api/v1/auth/token/refresh/'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh }),
@@ -86,7 +82,7 @@ async function refreshAccessToken() {
 
 export async function apiRequest(path, options = {}) {
   const { method = 'GET', body = null, auth = true, isFormData = false } = options
-  const url = `${getApiBaseUrl()}${path}`
+  const url = buildApiUrl(path)
 
   const headers = { ...(options.headers || {}) }
   if (!isFormData && body !== null && !headers['Content-Type']) {
@@ -155,7 +151,7 @@ export async function loginWithJwt(username, password) {
 
 export async function fetchHealthRaw() {
   const started = performance.now()
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/health/`)
+  const res = await fetch(buildApiUrl('/api/v1/health/'))
   const elapsedMs = Math.round(performance.now() - started)
   let data = null
   try {

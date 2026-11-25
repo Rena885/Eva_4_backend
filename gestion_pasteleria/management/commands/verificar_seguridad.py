@@ -6,6 +6,7 @@ Genera evidencia verificable en consola para las Actividades 3, 5 y 6 de EVA 4:
 - Estado de almacenamiento estático/media en Amazon S3
 """
 
+import secrets
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
@@ -23,7 +24,7 @@ class Command(BaseCommand):
         for idx, hasher in enumerate(settings.PASSWORD_HASHERS, start=1):
             self.stdout.write(f'  {idx}. {hasher}')
 
-        ejemplo_hash = make_password('ClaveDemoSegura2026!')
+        ejemplo_hash = make_password(secrets.token_urlsafe(16))
         partes = ejemplo_hash.split('$')
         self.stdout.write(f'  Ejemplo hash generado con salt automático: {partes[0]}$... (longitud {len(ejemplo_hash)} chars)')
 

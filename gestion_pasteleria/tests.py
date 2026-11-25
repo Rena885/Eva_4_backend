@@ -577,6 +577,15 @@ class Eva4SecurityAndAPITests(TestCase):
         self.assertEqual(client.get('/api/v1/schema/').status_code, 200)
         self.assertEqual(client.get('/api/v1/docs/').status_code, 200)
 
+    def test_open_redirect_mitigado_en_login(self):
+        resp = self.client.post(
+            '/login/?next=https://evil.example.com/phish',
+            {'username': 'admin_eva4', 'password': self.password_raw},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp['Location'], '/')
+
+
 
 
 
