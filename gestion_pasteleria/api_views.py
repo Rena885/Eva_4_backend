@@ -1,67 +1,215 @@
 """
-Vistas de la API REST (Django REST Framework - ViewSets) para Dulce Arte.
-Provee CRUD completo y endpoints especializados para:
-- Simulación y cálculo de cotizaciones personalizadas
-- Explosión y descuento atómico de Lista de Materiales (BOM)
-- Transición de estados en el Tablero Kanban digital
-- Confirmación de entregas en ruta con Firma Digital (Base64) o Comprobante Fotográfico
+Vistas de la API REST (Django REST Framework - ViewSets) para Dulce Arte (EVA 4).
+Provee:
+- Autenticación JWT (/auth/token/, /auth/token/refresh/, /auth/me/)
+- Healthcheck de conectividad PostgreSQL/RDS y almacenamiento S3 (/health/)
+- Resumen de Dashboard JSON (/dashboard/resumen/)
+- CRUD completo protegido por RBAC para los 10 recursos de negocio
+- Endpoints especializados (@action) para cotizador BOM, Kanban y entregas digitales
 """
 
 from decimal import Decimal, ROUND_HALF_UP
-from django.db.models import F
+from django.conf import settings
 from django.core.exceptions import ValidationError
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from django.db import connection
+from django.db.models import F, ProtectedError
+from django.utils import timezone
+from rest_framework import status, viewsets
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.views import TokenObtainPairView
+from drf_spectacular.utils import OpenApiTypes, extend_schema
 
 from .models import (
-    Cliente,
     CategoriaInsumo,
-    Insumo,
-    ProductoPasteleria,
-    ItemBOM,
-    PedidoPersonalizado,
-    InsumoExtraPedido,
-    MovimientoInventario,
-    RutaDespacho,
+    Cliente,
     DespachoPedido,
+    Insumo,
+    InsumoExtraPedido,
+    ItemBOM,
+    MovimientoInventario,
+    PedidoPersonalizado,
+    PerfilUsuario,
+    ProductoPasteleria,
+    RutaDespacho,
+)
+from .permissions import (
+    PuedeCotizarPedidos,
+    PuedeGestionarBodega,
+    PuedeGestionarCocina,
+    PuedeGestionarDespacho,
+    RoleBasedAPIPermission,
+    obtener_rol_api,
 )
 from .serializers import (
-    ClienteSerializer,
     CategoriaInsumoSerializer,
-    InsumoSerializer,
-    ProductoPasteleriaSerializer,
-    ItemBOMSerializer,
-    PedidoPersonalizadoSerializer,
-    InsumoExtraPedidoSerializer,
-    MovimientoInventarioSerializer,
-    RutaDespachoSerializer,
+    ClienteSerializer,
+    CustomTokenObtainPairSerializer,
     DespachoPedidoSerializer,
+    InsumoExtraPedidoSerializer,
+    InsumoSerializer,
+    ItemBOMSerializer,
+    MovimientoInventarioSerializer,
+    PedidoPersonalizadoSerializer,
+    ProductoPasteleriaSerializer,
+    RutaDespachoSerializer,
 )
 
 
-class ClienteViewSet(viewsets.ModelViewSet):
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Endpoint de login JWT que emite access/refresh tokens con claims de rol."""
+
+    serializer_class = CustomTokenObtainPairSerializer
+
+
+class ProtectedDeleteMixin:
+    """Evita errores HTTP 500 cuando se intenta eliminar un registro referenciado por FK PROTECT."""
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            self.perform_destroy(instance)
+        except ProtectedError:
+            return Response(
+                {
+                    'error': (
+                        'No se puede eliminar este registro porque tiene pedidos, movimientos '
+                        'o recetas asociadas en la base de datos.'
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(responses={200: OpenApiTypes.OBJECT, 503: OpenApiTypes.OBJECT})
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health_check(request):
+    """
+    Endpoint público de salud para monitoreo, pruebas de API Gateway + Rate Limit
+    y verificación de conectividad con Amazon RDS PostgreSQL y S3.
+    """
+    db_ok = True
+    db_error = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1;')
+            cursor.fetchone()
+    except Exception as exc:
+        db_ok = False
+        db_error = str(exc)
+
+    status_code = status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+    return Response(
+        {
+            'status': 'ok' if db_ok else 'degraded',
+            'servicio': 'Dulce Arte API RESTful (EVA 4)',
+            'timestamp': timezone.now().isoformat(),
+            'database': {
+                'conectada': db_ok,
+                'motor': connection.vendor,
+                'host': settings.DATABASES['default'].get('HOST', 'local'),
+                'error': db_error,
+            },
+            'storage': {
+                'modo': 'Amazon S3' if getattr(settings, 'USE_S3', False) else 'Local / WhiteNoise',
+                'bucket': getattr(settings, 'AWS_STORAGE_BUCKET_NAME', '') if getattr(settings, 'USE_S3', False) else None,
+            },
+            'seguridad': {
+                'autenticacion_principal': 'JWT Bearer (SimpleJWT)',
+                'hasher_activo': settings.PASSWORD_HASHERS[0].split('.')[-1],
+            },
+        },
+        status=status_code,
+    )
+
+
+@extend_schema(responses={200: OpenApiTypes.OBJECT})
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def auth_me(request):
+    """Retorna la identidad, rol RBAC y algoritmo hasher del usuario autenticado (sin exponer el hash)."""
+    user = request.user
+    rol = obtener_rol_api(user)
+    roles_dict = dict(PerfilUsuario.ROL_CHOICES)
+    algoritmo_hash = user.password.split('$', 1)[0] if '$' in user.password else 'desconocido'
+    return Response(
+        {
+            'id': user.id,
+            'username': user.username,
+            'nombre_completo': user.get_full_name() or user.username,
+            'email': user.email,
+            'rol': rol,
+            'rol_display': roles_dict.get(rol, rol),
+            'is_superuser': user.is_superuser,
+            'hasher_algoritmo': algoritmo_hash,
+            'password_en_texto_plano': False,
+        }
+    )
+
+
+@extend_schema(responses={200: OpenApiTypes.OBJECT})
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_resumen(request):
+    """Resumen consolidado JSON para el Dashboard de la SPA React en EC2 Frontend."""
+    pedidos_activos = PedidoPersonalizado.objects.exclude(
+        estado_comercial__in=('ENTREGADO', 'CANCELADO')
+    )
+    insumos_criticos = Insumo.objects.filter(activo=True, stock_actual__lte=F('stock_minimo'))
+    rutas_activas = RutaDespacho.objects.filter(estado_ruta__in=('PLANIFICADA', 'EN_RUTA'))
+    ultimos_pedidos = PedidoPersonalizado.objects.select_related('cliente', 'producto_base').order_by('-fecha_creacion')[:5]
+
+    return Response(
+        {
+            'kpis': {
+                'total_clientes': Cliente.objects.count(),
+                'pedidos_activos': pedidos_activos.count(),
+                'pedidos_en_cocina': pedidos_activos.exclude(estado_kanban='LISTO').count(),
+                'pedidos_listos_despacho': PedidoPersonalizado.objects.filter(
+                    estado_kanban='LISTO',
+                    estado_comercial='LISTO_DESPACHO',
+                ).count(),
+                'insumos_criticos': insumos_criticos.count(),
+                'rutas_activas': rutas_activas.count(),
+            },
+            'ultimos_pedidos': PedidoPersonalizadoSerializer(ultimos_pedidos, many=True).data,
+            'infraestructura': {
+                'base_datos': connection.vendor,
+                'db_host': settings.DATABASES['default'].get('HOST', 'localhost'),
+                'storage': 'Amazon S3' if getattr(settings, 'USE_S3', False) else 'Local / WhiteNoise',
+                'hasher_principal': settings.PASSWORD_HASHERS[0].split('.')[-1],
+            },
+        }
+    )
+
+
+class ClienteViewSet(ProtectedDeleteMixin, viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
     serializer_class = ClienteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('VENTAS',)
     filterset_fields = ['tipo_cliente', 'comuna']
     search_fields = ['nombre_completo', 'rut', 'email', 'telefono', 'preferencias_alimentarias']
     ordering_fields = ['nombre_completo', 'fecha_registro']
 
 
-class CategoriaInsumoViewSet(viewsets.ModelViewSet):
+class CategoriaInsumoViewSet(ProtectedDeleteMixin, viewsets.ModelViewSet):
     queryset = CategoriaInsumo.objects.all()
     serializer_class = CategoriaInsumoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('BODEGA',)
     filterset_fields = ['es_perecible', 'requiere_cadena_frio']
     search_fields = ['nombre', 'descripcion']
 
 
-class InsumoViewSet(viewsets.ModelViewSet):
+class InsumoViewSet(ProtectedDeleteMixin, viewsets.ModelViewSet):
     queryset = Insumo.objects.select_related('categoria').all()
     serializer_class = InsumoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('BODEGA',)
     filterset_fields = ['categoria', 'unidad_medida', 'activo']
     search_fields = ['codigo_sku', 'nombre', 'proveedor', 'lote_actual']
     ordering_fields = ['nombre', 'stock_actual', 'costo_unitario', 'fecha_vencimiento']
@@ -76,7 +224,7 @@ class InsumoViewSet(viewsets.ModelViewSet):
             'insumos_criticos': serializer.data,
         })
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[PuedeGestionarBodega])
     def ajustar_stock(self, request, pk=None):
         """
         Registra una Entrada de Compra o Ajuste de Merma en Bodega con trazabilidad en Kardex.
@@ -129,10 +277,11 @@ class InsumoViewSet(viewsets.ModelViewSet):
         })
 
 
-class ProductoPasteleriaViewSet(viewsets.ModelViewSet):
+class ProductoPasteleriaViewSet(ProtectedDeleteMixin, viewsets.ModelViewSet):
     queryset = ProductoPasteleria.objects.prefetch_related('items_bom__insumo').all()
     serializer_class = ProductoPasteleriaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('BODEGA',)
     filterset_fields = ['categoria_producto', 'requiere_refrigeracion', 'activo']
     search_fields = ['codigo', 'nombre', 'descripcion']
 
@@ -140,18 +289,20 @@ class ProductoPasteleriaViewSet(viewsets.ModelViewSet):
 class ItemBOMViewSet(viewsets.ModelViewSet):
     queryset = ItemBOM.objects.select_related('producto', 'insumo').all()
     serializer_class = ItemBOMSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('BODEGA',)
     filterset_fields = ['producto', 'insumo', 'etapa_uso']
 
 
-class PedidoPersonalizadoViewSet(viewsets.ModelViewSet):
+class PedidoPersonalizadoViewSet(ProtectedDeleteMixin, viewsets.ModelViewSet):
     queryset = (
         PedidoPersonalizado.objects.select_related('cliente', 'producto_base', 'vendedor', 'pastelero_asignado')
         .prefetch_related('insumos_extra__insumo', 'historial_kanban')
         .all()
     )
     serializer_class = PedidoPersonalizadoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('VENTAS',)
     filterset_fields = [
         'estado_kanban',
         'estado_comercial',
@@ -182,7 +333,7 @@ class PedidoPersonalizadoViewSet(viewsets.ModelViewSet):
             'explosion_materiales': explosion,
         })
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[PuedeGestionarCocina])
     def descontar_bom(self, request, pk=None):
         """Ejecuta manualmente o desde cocina el descuento atómico de insumos BOM en PostgreSQL."""
         pedido = self.get_object()
@@ -199,7 +350,7 @@ class PedidoPersonalizadoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[PuedeGestionarCocina])
     def mover_kanban(self, request, pk=None):
         """
         Endpoint consumido por el Tablero Kanban interactivo (Drag & Drop / Botones de Cocina).
@@ -237,14 +388,21 @@ class PedidoPersonalizadoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[PuedeCotizarPedidos])
     def simular_cotizacion(self, request):
         """
-        Simulador en tiempo real para el Cotizador de Pedidos Personalizados (Funcionalidad 1).
+        Simulador en tiempo real para el Cotizador de Pedidos Personalizados.
         Calcula precio sugerido, costo BOM y verifica disponibilidad de stock antes de guardar.
         """
         producto_id = request.data.get('producto_base_id')
-        porciones = int(request.data.get('porciones_solicitadas', 15))
+        try:
+            porciones = int(request.data.get('porciones_solicitadas', 15))
+        except (TypeError, ValueError):
+            return Response({'error': 'Porciones inválidas.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if porciones < 1:
+            return Response({'error': 'Las porciones deben ser al menos 1.'}, status=status.HTTP_400_BAD_REQUEST)
+
         complejidad = request.data.get('nivel_complejidad', 'PERSONALIZADO_MEDIO')
         modalidad = request.data.get('modalidad_entrega', 'DESPACHO_DOMICILIO')
 
@@ -253,7 +411,7 @@ class PedidoPersonalizadoViewSet(viewsets.ModelViewSet):
         except ProductoPasteleria.DoesNotExist:
             return Response({'error': 'Producto base no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
-        factor_escala = (Decimal(str(max(porciones, 1))) / Decimal(str(max(producto.porciones_base, 1)))).quantize(
+        factor_escala = (Decimal(str(porciones)) / Decimal(str(max(producto.porciones_base, 1)))).quantize(
             Decimal('0.001'), rounding=ROUND_HALF_UP
         )
         mapa_comp = {
@@ -314,22 +472,25 @@ class PedidoPersonalizadoViewSet(viewsets.ModelViewSet):
 class InsumoExtraPedidoViewSet(viewsets.ModelViewSet):
     queryset = InsumoExtraPedido.objects.select_related('pedido', 'insumo').all()
     serializer_class = InsumoExtraPedidoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('VENTAS',)
     filterset_fields = ['pedido', 'insumo']
 
 
 class MovimientoInventarioViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MovimientoInventario.objects.select_related('insumo', 'pedido_asociado', 'usuario').all()
     serializer_class = MovimientoInventarioSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    read_roles = ('BODEGA', 'COCINA', 'VENTAS')
     filterset_fields = ['insumo', 'tipo_movimiento', 'pedido_asociado']
     search_fields = ['insumo__nombre', 'insumo__codigo_sku', 'pedido_asociado__codigo_pedido', 'motivo']
 
 
-class RutaDespachoViewSet(viewsets.ModelViewSet):
+class RutaDespachoViewSet(ProtectedDeleteMixin, viewsets.ModelViewSet):
     queryset = RutaDespacho.objects.select_related('repartidor').prefetch_related('entregas__pedido__cliente').all()
     serializer_class = RutaDespachoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('REPARTIDOR',)
     filterset_fields = ['estado_ruta', 'fecha_ruta', 'repartidor']
     search_fields = ['codigo_ruta', 'nombre_ruta', 'vehiculo_patente']
 
@@ -337,15 +498,16 @@ class RutaDespachoViewSet(viewsets.ModelViewSet):
 class DespachoPedidoViewSet(viewsets.ModelViewSet):
     queryset = DespachoPedido.objects.select_related('ruta', 'pedido__cliente', 'pedido__producto_base').all()
     serializer_class = DespachoPedidoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleBasedAPIPermission]
+    write_roles = ('REPARTIDOR',)
     filterset_fields = ['ruta', 'estado_entrega', 'comuna_destino']
     search_fields = ['pedido__codigo_pedido', 'direccion_destino', 'nombre_receptor', 'rut_receptor']
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[PuedeGestionarDespacho])
     def confirmar_entrega(self, request, pk=None):
         """
         Confirma la entrega de una parada en ruta mediante Firma Digital (Canvas Base64)
-        o Comprobante Fotográfico (Funcionalidad 4).
+        o Comprobante Fotográfico.
         """
         despacho = self.get_object()
         nombre_receptor = request.data.get('nombre_receptor', '')

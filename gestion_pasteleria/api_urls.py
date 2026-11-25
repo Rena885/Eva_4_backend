@@ -1,19 +1,26 @@
 """
-Rutas del API REST (DRF Router) bajo el prefijo /api/v1/.
+Rutas de la API REST (DRF Router + JWT + OpenAPI + Healthcheck) bajo el prefijo /api/v1/.
 """
-from django.urls import path, include
+from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
+
 from .api_views import (
-    ClienteViewSet,
     CategoriaInsumoViewSet,
-    InsumoViewSet,
-    ProductoPasteleriaViewSet,
-    ItemBOMViewSet,
-    PedidoPersonalizadoViewSet,
-    InsumoExtraPedidoViewSet,
-    MovimientoInventarioViewSet,
-    RutaDespachoViewSet,
+    ClienteViewSet,
+    CustomTokenObtainPairView,
     DespachoPedidoViewSet,
+    InsumoExtraPedidoViewSet,
+    InsumoViewSet,
+    ItemBOMViewSet,
+    MovimientoInventarioViewSet,
+    PedidoPersonalizadoViewSet,
+    ProductoPasteleriaViewSet,
+    RutaDespachoViewSet,
+    auth_me,
+    dashboard_resumen,
+    health_check,
 )
 
 router = DefaultRouter()
@@ -29,5 +36,19 @@ router.register(r'rutas-despacho', RutaDespachoViewSet, basename='api-rutas-desp
 router.register(r'despachos', DespachoPedidoViewSet, basename='api-despachos')
 
 urlpatterns = [
+    # Autenticación JWT y Perfil
+    path('auth/token/', CustomTokenObtainPairView.as_view(), name='api-token-obtain'),
+    path('auth/token/refresh/', TokenRefreshView.as_view(), name='api-token-refresh'),
+    path('auth/me/', auth_me, name='api-auth-me'),
+
+    # Monitoreo y Dashboard JSON
+    path('health/', health_check, name='api-health'),
+    path('dashboard/resumen/', dashboard_resumen, name='api-dashboard-resumen'),
+
+    # Documentación OpenAPI / Swagger UI
+    path('schema/', SpectacularAPIView.as_view(), name='api-schema'),
+    path('docs/', SpectacularSwaggerView.as_view(url_name='api-schema'), name='api-swagger-ui'),
+
+    # Endpoints CRUD del dominio
     path('', include(router.urls)),
 ]

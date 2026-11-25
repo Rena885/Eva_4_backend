@@ -1,10 +1,14 @@
 """
 Serializadores de Django REST Framework (DRF) para el sistema Dulce Arte.
-Expone representaciones JSON enriquecidas con propiedades calculadas de BOM,
-Kanban y Despacho Logístico.
+Incluye:
+- CustomTokenObtainPairSerializer (JWT con claims de rol y nombre completo)
+- Validaciones explícitas de dominio para operaciones CRUD
+- Campos calculados de BOM, Kanban y Despacho Logístico
 """
 
+from decimal import Decimal
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import (
     PerfilUsuario,
     Cliente,
@@ -19,6 +23,33 @@ from .models import (
     RutaDespacho,
     DespachoPedido,
 )
+from .permissions import obtener_rol_api
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Emite JWT (access + refresh) inyectando el rol operativo y datos básicos en los claims."""
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token['username'] = user.username
+        token['rol'] = obtener_rol_api(user)
+        token['nombre_completo'] = user.get_full_name() or user.username
+        return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        rol = obtener_rol_api(self.user)
+        roles_dict = dict(PerfilUsuario.ROL_CHOICES)
+        data['usuario'] = {
+            'id': self.user.id,
+            'username': self.user.username,
+            'nombre_completo': self.user.get_full_name() or self.user.username,
+            'email': self.user.email,
+            'rol': rol,
+            'rol_display': roles_dict.get(rol, rol),
+        }
+        return data
 
 
 class PerfilUsuarioSerializer(serializers.ModelSerializer):
@@ -41,7 +72,7 @@ class PerfilUsuarioSerializer(serializers.ModelSerializer):
             'activo',
         ]
 
-    def get_nombre_completo(self, obj):
+    def get_nombre_completo(self, obj) -> str:
         return obj.usuario.get_full_name() or obj.usuario.username
 
 
@@ -51,6 +82,18 @@ class ClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cliente
         fields = '__all__'
+
+    def validate_rut(self, value):
+        limpio = (value or '').strip().upper()
+        if len(limpio) < 7:
+            raise serializers.ValidationError('Ingrese un RUT válido (mínimo 7 caracteres).')
+        return limpio
+
+    def validate_nombre_completo(self, value):
+        limpio = (value or '').strip()
+        if len(limpio) < 3:
+            raise serializers.ValidationError('El nombre completo debe tener al menos 3 caracteres.')
+        return limpio
 
 
 class CategoriaInsumoSerializer(serializers.ModelSerializer):
@@ -69,6 +112,16 @@ class InsumoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Insumo
         fields = '__all__'
+
+    def validate_stock_actual(self, value):
+        if value < Decimal('0'):
+            raise serializers.ValidationError('El stock disponible no puede ser negativo.')
+        return value
+
+    def validate_costo_unitario(self, value):
+        if value < Decimal('0'):
+            raise serializers.ValidationError('El costo unitario no puede ser negativo.')
+        return value
 
 
 class ItemBOMSerializer(serializers.ModelSerializer):
@@ -112,7 +165,7 @@ class HistorialKanbanSerializer(serializers.ModelSerializer):
         model = HistorialKanban
         fields = '__all__'
 
-    def get_usuario_nombre(self, obj):
+    def get_usuario_nombre(self, obj) -> str:
         if not obj.usuario:
             return 'Sistema'
         return obj.usuario.get_full_name() or obj.usuario.username
@@ -135,6 +188,11 @@ class PedidoPersonalizadoSerializer(serializers.ModelSerializer):
         model = PedidoPersonalizado
         fields = '__all__'
         read_only_fields = ['codigo_pedido', 'fecha_creacion', 'fecha_descuento_bom', 'actualizado_en']
+
+    def validate_porciones_solicitadas(self, value):
+        if value < 1:
+            raise serializers.ValidationError('Las porciones solicitadas deben ser al menos 1.')
+        return value
 
 
 class MovimientoInventarioSerializer(serializers.ModelSerializer):
@@ -173,5 +231,5 @@ class RutaDespachoSerializer(serializers.ModelSerializer):
         model = RutaDespacho
         fields = '__all__'
 
-    def get_repartidor_nombre(self, obj):
+    def get_repartidor_nombre(self, obj) -> str:
         return obj.repartidor.get_full_name() or obj.repartidor.username

@@ -1,82 +1,66 @@
 # Registro de Consultas y Apoyo de Inteligencia Artificial (`prompts_ia.md`)
 
-**Asignatura:** Desarrollo Backend — Evaluación Parcial N°3  
+**Asignatura:** Programación Backend — Evaluación N.º 3 y N.º 4  
 **Docente:** Marcelo Alvarado Aravena  
-**Proyecto Asignado:** Proyecto 3 — Sistema de Trazabilidad y Gestión de Pedidos para Pastelería Artesanal (**Dulce Arte**)  
-**Arquitectura:** Paradigma 4+1 de Kruchten · Django + Django REST Framework (DRF) + PostgreSQL + AWS EC2  
+**Proyecto:** Sistema de Trazabilidad y Gestión de Pedidos para Pastelería Artesanal (**Dulce Arte**)  
+**Arquitectura:** Arquitectura Distribuida AWS (EC2 Frontend React + API Gateway + EC2 Backend DRF + RDS PostgreSQL + S3 + CloudWatch)
 
 ---
 
 ## 1. Propósito del Registro
 
-En cumplimiento del **Criterio de Evaluación 4** de la rúbrica (*"Codifica una aplicación backend con acceso a base de datos y seguridad, según los requerimientos del problema planteado y orientaciones generadas por herramientas de inteligencia artificial"*), este documento detalla de forma estructurada los prompts utilizados, las decisiones técnicas adoptadas y las validaciones realizadas durante el desarrollo del sistema **Dulce Arte**.
+En cumplimiento de la **Evaluación N.º 4** (*"La IA podrá utilizarse para generar recomendaciones de seguridad, pero el estudiante deberá documentar al menos dos recomendaciones, contrastarlas con documentación oficial y justificar su aplicación o descarte"*), se documentan las recomendaciones técnicas evaluadas y aplicadas sobre el proyecto base de la Evaluación 3.
 
 ---
 
-## 2. Bitácora Estructurada de Prompts y Soluciones Aplicadas
+## 2. Recomendaciones de Seguridad y Arquitectura (EVA 4 — Contrastadas con Documentación Oficial)
 
-### Prompt 1: Modelado de Datos Relacional (PostgreSQL) y Paradigma 4+1 para Lista de Materiales (BOM)
+### Recomendación IA 1: Autenticación Stateless con JWT (`SimpleJWT`) y Autorización RBAC por recurso
 > **Consulta realizada a la IA:**  
-> *"Actúa como arquitecto de software senior experto en Django y PostgreSQL. Necesito modelar bajo el Paradigma 4+1 el Proyecto 3 'Pastelería Artesanal Dulce Arte'. El sistema debe conectar: 1) Cotización y registro de pedidos personalizados con escalado de porciones y nivel de complejidad, 2) Recetas base y Lista de Materiales (BOM - Bill of Materials) con porcentaje de merma técnica e ingredientes extra por pedido, 3) Tablero Kanban de cocina con 5 estados exactos (Recibido, En Preparación, Horneado/Decorado, Control de Calidad, Listo) y 4) Rutas de despacho con confirmación mediante firma digital o comprobante fotográfico. Diseña los modelos de Django garantizando integridad referencial y transacciones atómicas."*
+> *"Al separar el frontend (React en EC2 Frontend) del backend (Django REST Framework en EC2 Backend) detrás de Amazon API Gateway, ¿qué esquema de autenticación y autorización debo usar en DRF en lugar de depender solo de cookies de sesión?"*
 
-- **Orientación generada por la IA y aplicación en el código:**
-  - Se estructuraron **12 modelos relacionales** en [`gestion_pasteleria/models.py`](gestion_pasteleria/models.py):
-    - `PerfilUsuario`, `Cliente`, `CategoriaInsumo`, `Insumo`, `ProductoPasteleria`, `ItemBOM`, `PedidoPersonalizado`, `InsumoExtraPedido`, `MovimientoInventario`, `HistorialKanban`, `RutaDespacho`, `DespachoPedido`.
-  - Se incorporó el cálculo de factor de escala (`factor_escala_porciones = porciones_solicitadas / producto_base.porciones_base`) y porcentaje de merma técnica (`merma_tecnica_pct`) en cada línea `ItemBOM`.
+* **Recomendación obtenida:** Sustituir el flujo exclusivo por sesión/cookie en la API por **`djangorestframework-simplejwt`** (`JWTAuthentication`) con tokens de acceso de vida corta y *refresh tokens*, inyectando el rol del usuario como *custom claim* y validando permisos RBAC por ViewSet y `@action`, además de configurar `django-cors-headers` con orígenes explícitos.
+* **Contraste con documentación oficial:**
+  * Documentación de **Django REST Framework** (*Authentication*): indica que `SessionAuthentication` depende de cookies y protección CSRF del mismo dominio, mientras `JWTAuthentication` permite clientes SPA desacoplados en distintos dominios/IPs enviando `Authorization: Bearer <token>`.
+  * Documentación de **SimpleJWT** y **OWASP REST Security Cheat Sheet**: recomiendan tiempos de expiración acotados para el *access token* (ej. 60 min), rotación de *refresh token* y no confiar únicamente en la autenticación: cada endpoint debe verificar autorización por rol/recurso (*Broken Object/Function Level Authorization*).
+* **Decisión (Aplicada en el proyecto):**
+  * Se implementó `SimpleJWT` + `CustomTokenObtainPairSerializer` en [`gestion_pasteleria/serializers.py`](gestion_pasteleria/serializers.py) y [`gestion_pasteleria/api_urls.py`](gestion_pasteleria/api_urls.py).
+  * Se creó [`gestion_pasteleria/permissions.py`](gestion_pasteleria/permissions.py) (`RoleBasedAPIPermission` y permisos específicos por acción para `VENTAS`, `COCINA`, `BODEGA` y `REPARTIDOR`).
+  * Se mantuvo `SessionAuthentication` como respaldo en [`dulce_arte_project/settings.py`](dulce_arte_project/settings.py) únicamente para no romper las vistas SSR y Swagger UI locales, priorizando `JWTAuthentication` como primer autenticador para que las peticiones sin token retornen `HTTP 401 Unauthorized`.
 
 ---
 
-### Prompt 2: Algoritmo de Descuento Automático de Inventario mediante BOM con Bloqueo Transaccional
+### Recomendación IA 2: Fortalecimiento de Hashing de Contraseñas con `Argon2` y Eliminación de Secretos Hardcodeados
 > **Consulta realizada a la IA:**  
-> *"En Django con PostgreSQL, ¿cómo implemento el método de negocio para que cuando un PedidoPersonalizado pase a la etapa 'EN_PREPARACION' en el Tablero Kanban se descuenten automáticamente los insumos del inventario según su Lista de Materiales (BOM) escalada por las porciones solicitadas más los insumos extra del pedido, evitando condiciones de carrera y dobles descuentos?"*
+> *"¿Cómo reforzar el almacenamiento de contraseñas en Django y preparar `settings.py` para superar análisis SAST (SonarQube) y DAST (OWASP ZAP) antes de subir a AWS?"*
 
-- **Orientación generada por la IA y aplicación en el código:**
-  - Se implementó el método `@transaction.atomic def descontar_insumos_bom(self, usuario=None)` dentro de `PedidoPersonalizado` en [`gestion_pasteleria/models.py`](gestion_pasteleria/models.py).
-  - Utiliza `Insumo.objects.select_for_update()` para bloquear las filas de los insumos en PostgreSQL durante la transacción.
-  - Verifica previamente si existe stock suficiente para cada insumo requerido (`obtener_explosion_bom()`); si algún insumo presenta déficit, lanza un `ValidationError` detallando la cantidad requerida vs. disponible y revierte toda la operación.
-  - Registra cada descuento en el Kardex inmutable `MovimientoInventario` con `tipo_movimiento='SALIDA_BOM_PEDIDO'`, `stock_anterior`, `cantidad`, `stock_resultante` y referencia al pedido, marcando `insumos_descontados = True`.
+* **Recomendación obtenida:**
+  1. Configurar `Argon2PasswordHasher` (`argon2-cffi`) como hasher principal en `PASSWORD_HASHERS` por delante de `PBKDF2PasswordHasher`.
+  2. Eliminar valores hardcodeados de `SECRET_KEY` y contraseñas de BD en `settings.py`, poner `DEBUG = False` por defecto y habilitar cabeceras de seguridad (`X_FRAME_OPTIONS = 'DENY'`, `SECURE_CONTENT_TYPE_NOSNIFF = True`, `REFERRER_POLICY = 'same-origin'`, `SESSION_COOKIE_HTTPONLY = True`).
+* **Contraste con documentación oficial:**
+  * Documentación oficial de **Django** (*Password management in Django*): confirma que **Argon2** es el ganador del *Password Hashing Competition* y el algoritmo recomendado por Django cuando se instala `argon2-cffi`, manteniendo `PBKDF2PasswordHasher` en la lista para verificar hashes antiguos y actualizarlos transparentemente.
+  * **OWASP Password Storage Cheat Sheet**: recomienda Argon2id como primera opción frente a ataques por GPU/ASIC gracias a su costo configurable en memoria, siempre acompañado de *salt* aleatorio único (gestionado automáticamente por Django).
+* **Decisión (Aplicada y parcial/condicional):**
+  * **Aplicada:** `PASSWORD_HASHERS` actualizado en [`dulce_arte_project/settings.py`](dulce_arte_project/settings.py), validado con [`gestion_pasteleria/management/commands/verificar_seguridad.py`](gestion_pasteleria/management/commands/verificar_seguridad.py) y pruebas unitarias en [`gestion_pasteleria/tests.py`](gestion_pasteleria/tests.py).
+  * **Condicional (`USE_HTTPS`):** Se descartó forzar `SECURE_SSL_REDIRECT = True` de manera incondicional porque en laboratorios AWS Academy las instancias EC2 operan en HTTP puerto 80 detrás de API Gateway; dejarlo fijo provocaría bucles de redirección infinita. En su lugar se parametrizó mediante la variable `USE_HTTPS`.
 
 ---
 
-### Prompt 3: Diseño de API REST con Django REST Framework (DRF) y Simulador de Cotizaciones en Vivo
+### Recomendación IA 3: Cifrado en Reposo/Tránsito en Amazon RDS y Acceso Controlado a S3 con URLs Prefirmadas
 > **Consulta realizada a la IA:**  
-> *"Necesito crear ViewSets en Django REST Framework para todos los modelos de Dulce Arte, además de endpoints personalizados (`@action`) para: 1) simular una cotización en tiempo real devolviendo el costo BOM y factibilidad de stock antes de guardar, 2) mover tarjetas en el Tablero Kanban vía AJAX/Fetch y 3) confirmar entregas en ruta recibiendo una firma digital en Base64."*
+> *"¿Cómo conectar Django de forma segura a Amazon RDS PostgreSQL y servir archivos desde Amazon S3 sin abrir públicamente todo el bucket?"*
 
-- **Orientación generada por la IA y aplicación en el código:**
-  - Se implementaron los serializadores en [`gestion_pasteleria/serializers.py`](gestion_pasteleria/serializers.py) y los `ModelViewSet` en [`gestion_pasteleria/api_views.py`](gestion_pasteleria/api_views.py).
-  - Se crearon las acciones personalizadas:
-    - `POST /api/v1/pedidos/simular_cotizacion/`
-    - `GET /api/v1/pedidos/{id}/explosion_bom/`
-    - `POST /api/v1/pedidos/{id}/descontar_bom/`
-    - `POST /api/v1/pedidos/{id}/mover_kanban/`
-    - `POST /api/v1/despachos/{id}/confirmar_entrega/`
-    - `GET /api/v1/insumos/alertas_criticas/` y `POST /api/v1/insumos/{id}/ajustar_stock/`
+* **Recomendación obtenida:** Crear la instancia RDS con cifrado en reposo habilitado desde el inicio, restringir el Security Group del puerto `5432` exclusivamente al Security Group de la EC2 Backend, habilitar SSL/TLS (`sslmode=require`) desde Django y usar `django-storages` (`S3Storage`) con *Block Public Access* activado y `querystring_auth=True` (URLs prefirmadas SigV4).
+* **Contraste con documentación oficial:**
+  * **AWS RDS User Guide**: confirma que no se puede activar el cifrado en una instancia RDS existente sin crear un snapshot y copiarlo cifrado; asimismo documenta la conexión TLS mediante `sslmode=require`.
+  * **AWS S3 Best Practices**: recomienda mantener *Block Public Access* habilitado y emplear roles IAM + URLs prefirmadas temporales (SigV4) para controlar el acceso sin exponer el bucket completo.
+* **Decisión (Aplicada):** Se integró `DB_SSLMODE` y `USE_S3` / `AWS_S3_STATIC_QUERYSTRING_AUTH` en [`dulce_arte_project/settings.py`](dulce_arte_project/settings.py) y en [`deploy/deploy_backend_ec2.sh`](deploy/deploy_backend_ec2.sh).
 
 ---
 
-### Prompt 4: Personalización Avanzada de Django Admin con Templates y Acciones Masivas
-> **Consulta realizada a la IA:**  
-> *"Según el Criterio 2 de la rúbrica, debo personalizar el Django Admin registrando todos los modelos con filtros, búsquedas, campos visuales optimizados y templates personalizados. ¿Cómo sobrescribo `admin/base_site.html` y `admin/index.html` para mostrar KPIs en vivo de la pastelería y agregar badges visuales e inlines en `admin.py`?"*
+## 3. Bitácora Previa de la Evaluación 3 (Base del Dominio Dulce Arte)
 
-- **Orientación generada por la IA y aplicación en el código:**
-  - Se creó el procesador de contexto [`gestion_pasteleria/context_processors.py`](gestion_pasteleria/context_processors.py) que inyecta indicadores en tiempo real (`KPI_PEDIDOS_COCINA`, `KPI_INSUMOS_ALERTA`, `KPI_PEDIDOS_LISTOS`, `KPI_ENTREGAS_PENDIENTES`).
-  - Se personalizaron los templates [`templates/admin/base_site.html`](templates/admin/base_site.html) y [`templates/admin/index.html`](templates/admin/index.html).
-  - En [`gestion_pasteleria/admin.py`](gestion_pasteleria/admin.py) se registraron los 12 modelos con `format_html` para semáforos de stock crítico, alertas de vencimiento de insumos perecibles, etapas Kanban, inlines (`ItemBOMInline`, `InsumoExtraPedidoInline`, `HistorialKanbanInline`, `DespachoPedidoInline`) y acciones administrativas masivas.
-
----
-
-### Prompt 5: Lienzo Interactivo HTML5 (`<canvas>`) para Firma Digital de Recepción en Ruta
-> **Consulta realizada a la IA:**  
-> *"Genera un componente en HTML5 y JavaScript puro (compatible con eventos mouse y touch móvil) que permita al cliente firmar la recepción de su torta en pantalla, convierta el trazo a Data URI PNG Base64 (`canvas.toDataURL('image/png')`) y lo envíe al backend Django junto con el RUT del receptor, temperatura de entrega y fotografía opcional."*
-
-- **Orientación generada por la IA y aplicación en el código:**
-  - Se implementó en [`templates/gestion_pasteleria/confirmar_entrega.html`](templates/gestion_pasteleria/confirmar_entrega.html) un pad de firma digital con soporte para `mousedown/mousemove/mouseup` y `touchstart/touchmove/touchend`, botón de limpieza y generador de firma rápida de prueba, conectado al método transaccional `DespachoPedido.confirmar_entrega_digital()`.
-
----
-
-### Prompt 6: Automatización de Despliegue en Instancia Única AWS Academy EC2 (Ubuntu + PostgreSQL + Gunicorn + Nginx)
-> **Consulta realizada a la IA:**  
-> *"Elabora un script bash idempotente para desplegar esta aplicación Django + DRF + PostgreSQL en una instancia EC2 Ubuntu de AWS Academy. Debe consultar automáticamente la IP pública desde los metadatos de EC2 (`169.254.169.254`), crear la base de datos en PostgreSQL, aplicar migraciones, cargar el seed de datos y configurar Gunicorn con Systemd y Nginx en el puerto 80."*
-
-- **Orientación generada por la IA y aplicación en el código:**
-  - Se creó el script [`deploy/deploy_aws.sh`](deploy/deploy_aws.sh) que automatiza de principio a fin la configuración de PostgreSQL, entorno virtual, variables de entorno `.env`, migraciones, archivos estáticos con WhiteNoise/Nginx y demonios `systemd`.
+1. **Modelado Relacional (12 entidades) y Paradigma 4+1:** Estructurado en [`gestion_pasteleria/models.py`](gestion_pasteleria/models.py) conectando clientes, recetas base BOM, insumos, pedidos personalizados, Kanban de cocina y rutas de despacho.
+2. **Transacciones Atómicas BOM:** Descuento automático de insumos con `@transaction.atomic` y `select_for_update()` al pasar a `EN_PREPARACION` en el tablero Kanban.
+3. **API RESTful DRF y Simulador en Vivo:** ViewSets CRUD y acciones personalizadas (`simular_cotizacion`, `mover_kanban`, `explosion_bom`, `confirmar_entrega`).
+4. **Firma Digital HTML5 Canvas:** Captura de firma en Base64 para confirmación de entregas en ruta.

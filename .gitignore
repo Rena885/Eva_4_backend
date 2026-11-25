@@ -12,6 +12,11 @@ env/
 # Local SQLite fallback if used
 db.sqlite3
 
+# Frontend React/Vite build & dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
 # Media uploads & Static build
 staticfiles/
 media/

@@ -323,4 +323,260 @@ class DulceArteBusinessLogicTests(TestCase):
         self.assertEqual(ins_jamon.stock_actual, Decimal('18.000'))
 
 
+class Eva4SecurityAndAPITests(TestCase):
+    """Pruebas de EVA 4: JWT, RBAC por rol, CRUD + validaciones, Argon2 + salt, Healthcheck y OpenAPI."""
+
+    def setUp(self):
+        self.password_raw = 'DulceArteSegura2026!'
+        self.admin_user = User.objects.create_user(
+            username='admin_eva4',
+            password=self.password_raw,
+            first_name='Admin',
+            last_name='Eva4',
+            is_superuser=True,
+            is_staff=True,
+        )
+        PerfilUsuario.objects.create(usuario=self.admin_user, rol='ADMIN')
+
+        self.ventas_user = User.objects.create_user(username='ventas_eva4', password=self.password_raw)
+        PerfilUsuario.objects.create(usuario=self.ventas_user, rol='VENTAS')
+
+        self.cocina_user = User.objects.create_user(username='cocina_eva4', password=self.password_raw)
+        PerfilUsuario.objects.create(usuario=self.cocina_user, rol='COCINA')
+
+        self.bodega_user = User.objects.create_user(username='bodega_eva4', password=self.password_raw)
+        PerfilUsuario.objects.create(usuario=self.bodega_user, rol='BODEGA')
+
+        self.repartidor_user = User.objects.create_user(username='repartidor_eva4', password=self.password_raw)
+        PerfilUsuario.objects.create(usuario=self.repartidor_user, rol='REPARTIDOR')
+
+        self.cat = CategoriaInsumo.objects.create(nombre='Lácteos Test')
+        self.insumo = Insumo.objects.create(
+            codigo_sku='INS-TEST-001',
+            nombre='Crema Test',
+            categoria=self.cat,
+            unidad_medida='LT',
+            stock_actual=Decimal('10.000'),
+            stock_minimo=Decimal('2.000'),
+            costo_unitario=Decimal('4000'),
+        )
+        self.producto = ProductoPasteleria.objects.create(
+            codigo='REC-TEST-01',
+            nombre='Torta Test JWT',
+            porciones_base=10,
+            precio_base=Decimal('35000'),
+        )
+        ItemBOM.objects.create(
+            producto=self.producto,
+            insumo=self.insumo,
+            cantidad_requerida=Decimal('1.000'),
+            merma_tecnica_pct=Decimal('0.00'),
+            etapa_uso='RELLENO',
+        )
+
+    def _obtener_tokens(self, username):
+        client = APIClient()
+        resp = client.post(
+            '/api/v1/auth/token/',
+            {'username': username, 'password': self.password_raw},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        return resp.data
+
+    def test_jwt_login_refresh_y_proteccion_401(self):
+        client = APIClient()
+        # Sin token debe rechazar con 401
+        self.assertEqual(client.get('/api/v1/clientes/').status_code, 401)
+        self.assertEqual(client.get('/api/v1/dashboard/resumen/').status_code, 401)
+
+        tokens = self._obtener_tokens('ventas_eva4')
+        self.assertIn('access', tokens)
+        self.assertIn('refresh', tokens)
+        self.assertEqual(tokens['usuario']['rol'], 'VENTAS')
+
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+        me_resp = client.get('/api/v1/auth/me/')
+        self.assertEqual(me_resp.status_code, 200)
+        self.assertEqual(me_resp.data['rol'], 'VENTAS')
+        self.assertEqual(me_resp.data['hasher_algoritmo'], 'argon2')
+        self.assertFalse(me_resp.data['password_en_texto_plano'])
+
+        refresh_resp = client.post(
+            '/api/v1/auth/token/refresh/',
+            {'refresh': tokens['refresh']},
+            format='json',
+        )
+        self.assertEqual(refresh_resp.status_code, 200)
+        self.assertIn('access', refresh_resp.data)
+
+    def test_rbac_autorizacion_api_por_rol(self):
+        # BODEGA no puede crear clientes ni mover Kanban, pero sí ajustar stock
+        bodega_tokens = self._obtener_tokens('bodega_eva4')
+        client_bodega = APIClient()
+        client_bodega.credentials(HTTP_AUTHORIZATION=f"Bearer {bodega_tokens['access']}")
+
+        resp_cli = client_bodega.post(
+            '/api/v1/clientes/',
+            {
+                'rut': '18.111.222-3',
+                'nombre_completo': 'Cliente Denegado',
+                'email': 'denegado@test.cl',
+                'telefono': '+56912345678',
+                'direccion_habitual': 'Calle 1',
+                'comuna': 'Providencia',
+            },
+            format='json',
+        )
+        self.assertEqual(resp_cli.status_code, 403)
+
+        resp_stock = client_bodega.post(
+            f'/api/v1/insumos/{self.insumo.pk}/ajustar_stock/',
+            {'tipo_movimiento': 'ENTRADA_COMPRA', 'cantidad': '5.000', 'motivo': 'Compra JWT'},
+            format='json',
+        )
+        self.assertEqual(resp_stock.status_code, 200)
+
+        # VENTAS puede crear cliente y pedido, pero no mover Kanban (403)
+        ventas_tokens = self._obtener_tokens('ventas_eva4')
+        client_ventas = APIClient()
+        client_ventas.credentials(HTTP_AUTHORIZATION=f"Bearer {ventas_tokens['access']}")
+
+        cliente_resp = client_ventas.post(
+            '/api/v1/clientes/',
+            {
+                'rut': '18.222.333-4',
+                'nombre_completo': 'Cliente Ventas',
+                'email': 'ventas@test.cl',
+                'telefono': '+56912345678',
+                'direccion_habitual': 'Av. Italia 500',
+                'comuna': 'Providencia',
+            },
+            format='json',
+        )
+        self.assertEqual(cliente_resp.status_code, 201)
+        cliente_id = cliente_resp.data['id']
+
+        pedido_resp = client_ventas.post(
+            '/api/v1/pedidos/',
+            {
+                'cliente': cliente_id,
+                'producto_base': self.producto.pk,
+                'porciones_solicitadas': 10,
+                'nivel_complejidad': 'ESTANDAR',
+                'modalidad_entrega': 'RETIRO_TIENDA',
+            },
+            format='json',
+        )
+        self.assertEqual(pedido_resp.status_code, 201)
+        pedido_id = pedido_resp.data['id']
+
+        resp_kanban_denegado = client_ventas.post(
+            f'/api/v1/pedidos/{pedido_id}/mover_kanban/',
+            {'nuevo_estado': 'EN_PREPARACION'},
+            format='json',
+        )
+        self.assertEqual(resp_kanban_denegado.status_code, 403)
+
+        # COCINA sí puede mover Kanban y dispara descuento BOM
+        cocina_tokens = self._obtener_tokens('cocina_eva4')
+        client_cocina = APIClient()
+        client_cocina.credentials(HTTP_AUTHORIZATION=f"Bearer {cocina_tokens['access']}")
+        resp_kanban_ok = client_cocina.post(
+            f'/api/v1/pedidos/{pedido_id}/mover_kanban/',
+            {'nuevo_estado': 'EN_PREPARACION'},
+            format='json',
+        )
+        self.assertEqual(resp_kanban_ok.status_code, 200)
+        self.assertTrue(resp_kanban_ok.data['pedido']['insumos_descontados'])
+
+    def test_crud_completo_clientes_y_protected_error_409(self):
+        admin_tokens = self._obtener_tokens('admin_eva4')
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {admin_tokens['access']}")
+
+        # Validación RUT inválido -> 400
+        bad_resp = client.post(
+            '/api/v1/clientes/',
+            {
+                'rut': '123',
+                'nombre_completo': 'Cliente Malo',
+                'email': 'bad@test.cl',
+                'telefono': '+56911111111',
+                'direccion_habitual': 'Dir 1',
+                'comuna': 'Santiago',
+            },
+            format='json',
+        )
+        self.assertEqual(bad_resp.status_code, 400)
+
+        # Create -> Read -> Update -> Delete
+        create_resp = client.post(
+            '/api/v1/clientes/',
+            {
+                'rut': '19.444.555-6',
+                'nombre_completo': 'Cliente CRUD Prueba',
+                'email': 'crud@test.cl',
+                'telefono': '+56999998888',
+                'direccion_habitual': 'Av. Providencia 100',
+                'comuna': 'Providencia',
+            },
+            format='json',
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        cid = create_resp.data['id']
+
+        self.assertEqual(client.get(f'/api/v1/clientes/{cid}/').status_code, 200)
+        patch_resp = client.patch(
+            f'/api/v1/clientes/{cid}/',
+            {'comuna': 'Ñuñoa'},
+            format='json',
+        )
+        self.assertEqual(patch_resp.status_code, 200)
+        self.assertEqual(patch_resp.data['comuna'], 'Ñuñoa')
+        self.assertEqual(client.delete(f'/api/v1/clientes/{cid}/').status_code, 204)
+
+        # ProtectedError -> 409 Conflict
+        cliente_prot = Cliente.objects.create(
+            rut='16.777.888-9',
+            nombre_completo='Cliente Protegido',
+            email='prot@test.cl',
+            telefono='+56977776666',
+            direccion_habitual='Av. Apoquindo 200',
+            comuna='Las Condes',
+        )
+        PedidoPersonalizado.objects.create(
+            cliente=cliente_prot,
+            producto_base=self.producto,
+            porciones_solicitadas=10,
+        )
+        del_prot = client.delete(f'/api/v1/clientes/{cliente_prot.pk}/')
+        self.assertEqual(del_prot.status_code, 409)
+
+    def test_password_hashing_argon2_con_salt_no_texto_plano(self):
+        self.assertTrue(self.ventas_user.password.startswith('argon2$'))
+        self.assertTrue(self.cocina_user.password.startswith('argon2$'))
+        self.assertNotIn(self.password_raw, self.ventas_user.password)
+        # Misma contraseña en dos usuarios genera distinto hash por salt aleatorio
+        self.assertNotEqual(self.ventas_user.password, self.cocina_user.password)
+        self.assertTrue(self.ventas_user.check_password(self.password_raw))
+
+    def test_health_check_dashboard_y_openapi_docs(self):
+        client = APIClient()
+        health = client.get('/api/v1/health/')
+        self.assertEqual(health.status_code, 200)
+        self.assertTrue(health.data['database']['conectada'])
+
+        admin_tokens = self._obtener_tokens('admin_eva4')
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {admin_tokens['access']}")
+
+        dash = client.get('/api/v1/dashboard/resumen/')
+        self.assertEqual(dash.status_code, 200)
+        self.assertIn('kpis', dash.data)
+
+        self.assertEqual(client.get('/api/v1/schema/').status_code, 200)
+        self.assertEqual(client.get('/api/v1/docs/').status_code, 200)
+
+
+
 
