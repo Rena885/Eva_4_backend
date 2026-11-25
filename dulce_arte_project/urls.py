@@ -33,7 +33,7 @@ def swagger_asset_view(request, asset_name):
 
 @require_GET
 def robots_txt_view(request):
-    return HttpResponse('User-agent: *\nDisallow: /admin/\n', content_type='text/plain; charset=utf-8')
+    return HttpResponse('User-agent: *\nAllow: /api/v1/docs/\n', content_type='text/plain; charset=utf-8')
 
 
 @require_GET
