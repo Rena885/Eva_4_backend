@@ -2,7 +2,7 @@
 Rutas de la API REST (DRF Router + JWT + OpenAPI + Healthcheck) bajo el prefijo /api/v1/.
 """
 from django.urls import include, path
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerSplitView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -47,7 +47,7 @@ urlpatterns = [
 
     # Documentación OpenAPI / Swagger UI
     path('schema/', SpectacularAPIView.as_view(), name='api-schema'),
-    path('docs/', SpectacularSwaggerSplitView.as_view(url_name='api-schema'), name='api-swagger-ui'),
+    path('docs/', SpectacularSwaggerView.as_view(url_name='api-schema'), name='api-swagger-ui'),
 
     # Endpoints CRUD del dominio
     path('', include(router.urls)),

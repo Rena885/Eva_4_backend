@@ -579,16 +579,19 @@ class Eva4SecurityAndAPITests(TestCase):
         self.assertEqual(docs_resp.status_code, 200)
         docs_html = docs_resp.content.decode('utf-8')
         self.assertNotIn('cdn.jsdelivr.net', docs_html)
-        self.assertIn('/api/v1/docs/?script=', docs_html)
-        self.assertIn('/swagger-assets/swagger-ui-dist/swagger-ui-bundle.js', docs_html)
+        self.assertIn('/swagger-assets/openapi-docs.js', docs_html)
+        self.assertIn('/swagger-assets/openapi-docs.css', docs_html)
 
-        docs_js = client.get('/api/v1/docs/?script=')
+        docs_js = self.client.get('/swagger-assets/openapi-docs.js')
         self.assertEqual(docs_js.status_code, 200)
         self.assertIn('javascript', docs_js.headers.get('Content-Type', ''))
 
-        bundle_resp = self.client.get('/swagger-assets/swagger-ui-dist/swagger-ui-bundle.js')
-        self.assertEqual(bundle_resp.status_code, 200)
-        self.assertIn('javascript', bundle_resp.headers.get('Content-Type', ''))
+        docs_css = self.client.get('/swagger-assets/openapi-docs.css')
+        self.assertEqual(docs_css.status_code, 200)
+        self.assertIn('css', docs_css.headers.get('Content-Type', ''))
+
+        self.assertEqual(self.client.get('/robots.txt').status_code, 200)
+        self.assertEqual(self.client.get('/sitemap.xml').status_code, 200)
 
     def test_open_redirect_mitigado_en_login(self):
         resp = self.client.post(

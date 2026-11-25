@@ -55,7 +55,6 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'django_filters',
     'drf_spectacular',
-    'drf_spectacular_sidecar',
     'storages',
     # Aplicación principal del dominio Dulce Arte
     'gestion_pasteleria.apps.GestionPasteleriaConfig',
@@ -225,11 +224,6 @@ SPECTACULAR_SETTINGS = {
     ),
     'VERSION': '2.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-    'SWAGGER_UI_DIST': os.getenv('SWAGGER_UI_DIST', '/swagger-assets/swagger-ui-dist'),
-    'SWAGGER_UI_FAVICON_HREF': os.getenv(
-        'SWAGGER_UI_FAVICON_HREF',
-        '/swagger-assets/swagger-ui-dist/favicon-32x32.png',
-    ),
 }
 
 # Internacionalización y Zona Horaria (Chile)

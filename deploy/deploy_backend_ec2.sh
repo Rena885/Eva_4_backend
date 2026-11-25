@@ -111,11 +111,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable dulce_arte_backend
 sudo systemctl restart dulce_arte_backend
 
-# 7. Copiar assets locales de Swagger UI (evita JS cross-domain / faltantes SRI) y configurar Nginx
-SIDECAR_DIR=$("$APP_DIR/venv/bin/python" -c "import drf_spectacular_sidecar, pathlib; print(pathlib.Path(drf_spectacular_sidecar.__file__).parent / 'static' / 'drf_spectacular_sidecar')")
+# 7. Copiar assets propios de OpenAPI (cero librerías vulnerables / cero terceros) y configurar Nginx
 sudo mkdir -p /var/www/swagger_assets
 sudo rm -rf /var/www/swagger_assets/*
-sudo cp -r "$SIDECAR_DIR"/* /var/www/swagger_assets/
+sudo cp -r "$APP_DIR/static/openapi/"* /var/www/swagger_assets/
 
 sudo bash -c "cat > /etc/nginx/sites-available/dulce_arte_backend" <<EOF
 server {
@@ -128,7 +127,7 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "same-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';" always;
 
     location /swagger-assets/ {
         alias /var/www/swagger_assets/;
