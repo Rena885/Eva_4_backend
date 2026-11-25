@@ -111,12 +111,28 @@ sudo systemctl daemon-reload
 sudo systemctl enable dulce_arte_backend
 sudo systemctl restart dulce_arte_backend
 
-# 7. Configurar Nginx como Reverse Proxy (Puerto 80 -> Gunicorn 8000)
+# 7. Copiar assets locales de Swagger UI (evita JS cross-domain / faltantes SRI) y configurar Nginx
+SIDECAR_DIR=$("$APP_DIR/venv/bin/python" -c "import drf_spectacular_sidecar, pathlib; print(pathlib.Path(drf_spectacular_sidecar.__file__).parent / 'static' / 'drf_spectacular_sidecar')")
+sudo mkdir -p /var/www/swagger_assets
+sudo rm -rf /var/www/swagger_assets/*
+sudo cp -r "$SIDECAR_DIR"/* /var/www/swagger_assets/
+
 sudo bash -c "cat > /etc/nginx/sites-available/dulce_arte_backend" <<EOF
 server {
     listen 80;
     server_name $PUBLIC_IP _;
+    server_tokens off;
     client_max_body_size 15M;
+
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';" always;
+
+    location /swagger-assets/ {
+        alias /var/www/swagger_assets/;
+    }
 
     location /static/ {
         alias $APP_DIR/staticfiles/;
@@ -128,6 +144,9 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:8000;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header Referrer-Policy;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

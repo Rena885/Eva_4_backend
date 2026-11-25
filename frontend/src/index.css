@@ -227,3 +227,28 @@ body {
   border-top: 1px solid var(--da-border);
   color: var(--da-muted);
 }
+
+.da-progress {
+  width: 100%;
+  height: 0.625rem;
+  border-radius: 9999px;
+  overflow: hidden;
+  appearance: none;
+  background-color: #f5e8f2;
+  display: block;
+}
+
+.da-progress::-webkit-progress-bar {
+  background-color: #f5e8f2;
+  border-radius: 9999px;
+}
+
+.da-progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #d9739f 0%, #5cb88a 100%);
+  border-radius: 9999px;
+}
+
+.da-progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #d9739f 0%, #5cb88a 100%);
+  border-radius: 9999px;
+}

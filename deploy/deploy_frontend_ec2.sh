@@ -50,6 +50,13 @@ sudo bash -c "cat > /etc/nginx/sites-available/dulce_arte_frontend" <<EOF
 server {
     listen 80;
     server_name _;
+    server_tokens off;
+
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' $API_GW_URL; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';" always;
 
     root /var/www/dulce-arte-frontend;
     index index.html;

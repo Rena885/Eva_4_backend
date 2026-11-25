@@ -575,7 +575,20 @@ class Eva4SecurityAndAPITests(TestCase):
         self.assertIn('kpis', dash.data)
 
         self.assertEqual(client.get('/api/v1/schema/').status_code, 200)
-        self.assertEqual(client.get('/api/v1/docs/').status_code, 200)
+        docs_resp = client.get('/api/v1/docs/')
+        self.assertEqual(docs_resp.status_code, 200)
+        docs_html = docs_resp.content.decode('utf-8')
+        self.assertNotIn('cdn.jsdelivr.net', docs_html)
+        self.assertIn('/api/v1/docs/?script=', docs_html)
+        self.assertIn('/swagger-assets/swagger-ui-dist/swagger-ui-bundle.js', docs_html)
+
+        docs_js = client.get('/api/v1/docs/?script=')
+        self.assertEqual(docs_js.status_code, 200)
+        self.assertIn('javascript', docs_js.headers.get('Content-Type', ''))
+
+        bundle_resp = self.client.get('/swagger-assets/swagger-ui-dist/swagger-ui-bundle.js')
+        self.assertEqual(bundle_resp.status_code, 200)
+        self.assertIn('javascript', bundle_resp.headers.get('Content-Type', ''))
 
     def test_open_redirect_mitigado_en_login(self):
         resp = self.client.post(
@@ -584,6 +597,15 @@ class Eva4SecurityAndAPITests(TestCase):
         )
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp['Location'], '/')
+
+    def test_csrf_cookie_httponly_y_cabeceras_django(self):
+        from django.conf import settings as django_settings
+        self.assertTrue(django_settings.CSRF_COOKIE_HTTPONLY)
+        self.assertTrue(django_settings.SESSION_COOKIE_HTTPONLY)
+        login_page = self.client.get('/login/')
+        self.assertEqual(login_page.status_code, 200)
+        self.assertEqual(login_page.headers.get('X-Frame-Options'), 'DENY')
+        self.assertEqual(login_page.headers.get('X-Content-Type-Options'), 'nosniff')
 
 
 

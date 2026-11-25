@@ -165,12 +165,11 @@ export default function DespachoView() {
                 {ruta.paradas_entregadas} de {ruta.total_paradas} paradas ({ruta.porcentaje_completado}%)
               </strong>
             </div>
-            <div className="w-full h-2.5 rounded-full bg-[#f5e8f2] overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#d9739f] to-[#5cb88a] transition-all"
-                style={{ width: `${ruta.porcentaje_completado || 0}%` }}
-              />
-            </div>
+            <progress
+              className="da-progress"
+              value={ruta.porcentaje_completado || 0}
+              max="100"
+            />
           </div>
 
           <div className="divide-y divide-[#f6edf4]">
