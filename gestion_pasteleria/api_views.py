@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import connection
-from django.db.models import F, ProtectedError
+from django.db.models import F, ProtectedError, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -161,11 +161,22 @@ def dashboard_resumen(request):
     insumos_criticos = Insumo.objects.filter(activo=True, stock_actual__lte=F('stock_minimo'))
     rutas_activas = RutaDespacho.objects.filter(estado_ruta__in=('PLANIFICADA', 'EN_RUTA'))
     ultimos_pedidos = PedidoPersonalizado.objects.select_related('cliente', 'producto_base').order_by('-fecha_creacion')[:5]
+    ultimos_movimientos = MovimientoInventario.objects.select_related(
+        'insumo', 'pedido_asociado', 'usuario'
+    ).all()[:5]
+    ingresos_totales = (
+        PedidoPersonalizado.objects.exclude(estado_comercial='CANCELADO').aggregate(
+            total=Sum('precio_total')
+        )['total']
+        or 0
+    )
+    kanban_choices = PedidoPersonalizado._meta.get_field('estado_kanban').choices
 
     return Response(
         {
             'kpis': {
                 'total_clientes': Cliente.objects.count(),
+                'total_pedidos': PedidoPersonalizado.objects.count(),
                 'pedidos_activos': pedidos_activos.count(),
                 'pedidos_en_cocina': pedidos_activos.exclude(estado_kanban='LISTO').count(),
                 'pedidos_listos_despacho': PedidoPersonalizado.objects.filter(
@@ -174,8 +185,20 @@ def dashboard_resumen(request):
                 ).count(),
                 'insumos_criticos': insumos_criticos.count(),
                 'rutas_activas': rutas_activas.count(),
+                'ingresos_totales': float(ingresos_totales),
+                'entregas_pendientes': DespachoPedido.objects.exclude(estado_entrega='ENTREGADO').count(),
             },
+            'resumen_kanban': [
+                {
+                    'codigo': codigo,
+                    'etiqueta': etiqueta,
+                    'cantidad': PedidoPersonalizado.objects.filter(estado_kanban=codigo).count(),
+                }
+                for codigo, etiqueta in kanban_choices
+            ],
             'ultimos_pedidos': PedidoPersonalizadoSerializer(ultimos_pedidos, many=True).data,
+            'insumos_criticos_lista': InsumoSerializer(insumos_criticos[:5], many=True).data,
+            'ultimos_movimientos': MovimientoInventarioSerializer(ultimos_movimientos, many=True).data,
             'infraestructura': {
                 'base_datos': connection.vendor,
                 'db_host': settings.DATABASES['default'].get('HOST', 'localhost'),

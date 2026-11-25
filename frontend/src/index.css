@@ -1,1 +1,229 @@
 @import "tailwindcss";
+
+:root {
+  --da-burgundy: #5e3a5a;
+  --da-burgundy-deep: #462842;
+  --da-rose: #d9739f;
+  --da-rose-hover: #c55d8b;
+  --da-cream: #fdf8fb;
+  --da-surface: #ffffff;
+  --da-border: #f0e4ee;
+  --da-text: #3c2a3a;
+  --da-muted: #7f6a7c;
+  --da-lavender: #c9a7eb;
+  --da-mint: #7ec8a7;
+  --da-peach: #f4a688;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--da-cream);
+  color: var(--da-text);
+}
+
+/* Sidebar estilo Eva 3 Dulce Arte */
+.da-sidebar {
+  background: linear-gradient(180deg, #fde4ee 0%, #f5e1f3 50%, #e3dcf8 100%);
+  border-right: 1px solid var(--da-border);
+  color: var(--da-burgundy);
+}
+
+.da-sidebar-heading {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8f6f8b;
+}
+
+.da-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.62rem 0.9rem;
+  border-radius: 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--da-burgundy);
+  transition: all 0.18s ease;
+  text-align: left;
+}
+
+.da-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--da-burgundy-deep);
+  transform: translateX(2px);
+}
+
+.da-sidebar-link.active {
+  background: linear-gradient(135deg, #d9739f 0%, #ba6cc2 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(217, 115, 159, 0.28);
+}
+
+.da-topbar {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--da-border);
+}
+
+.da-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #f6a5c0 0%, #b794f4 100%);
+  color: #ffffff;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  box-shadow: 0 3px 10px rgba(217, 115, 159, 0.25);
+}
+
+/* Tarjetas & Botones */
+.da-card {
+  background: var(--da-surface);
+  border: 1px solid var(--da-border);
+  border-radius: 1.1rem;
+  box-shadow: 0 6px 22px rgba(94, 58, 90, 0.05);
+}
+
+.da-kpi-card {
+  background: var(--da-surface);
+  border: 1px solid var(--da-border);
+  border-left: 4px solid var(--da-rose);
+  border-radius: 1rem;
+  box-shadow: 0 6px 20px rgba(94, 58, 90, 0.05);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.da-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(94, 58, 90, 0.08);
+}
+
+.da-kpi-rose { border-left-color: #d9739f; }
+.da-kpi-mint { border-left-color: #5cb88a; }
+.da-kpi-peach { border-left-color: #ef9273; }
+.da-kpi-lavender { border-left-color: #9e7be6; }
+
+.da-stage {
+  background: linear-gradient(180deg, #fff9fc 0%, #fdf2f8 100%);
+  border: 1px solid var(--da-border);
+  border-radius: 0.95rem;
+  padding: 0.85rem 0.9rem;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.da-stage:hover {
+  border-color: #e4b8d0;
+  box-shadow: 0 4px 12px rgba(94, 58, 90, 0.06);
+}
+
+.btn-dulce {
+  background: linear-gradient(135deg, #d9739f 0%, #c05f8c 100%);
+  color: #ffffff;
+  border-radius: 0.78rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(217, 115, 159, 0.28);
+  transition: all 0.16s ease;
+}
+
+.btn-dulce:hover {
+  background: linear-gradient(135deg, #c96290 0%, #ac4d79 100%);
+  transform: translateY(-1px);
+}
+
+.btn-dulce:disabled {
+  opacity: 0.6;
+  transform: none;
+}
+
+.btn-dulce-outline {
+  background: #ffffff;
+  color: var(--da-burgundy);
+  border: 1px solid #e6d1e3;
+  border-radius: 0.78rem;
+  font-weight: 600;
+  transition: all 0.16s ease;
+}
+
+.btn-dulce-outline:hover {
+  background: #fdf2f8;
+  border-color: #d9739f;
+}
+
+/* Login estilo Eva 3 */
+.da-login-bg {
+  background: linear-gradient(135deg, #fde8f0 0%, #fdf8fb 50%, #ebe5fa 100%);
+}
+
+.da-login-aside {
+  background: linear-gradient(160deg, #f9d5e5 0%, #f1e1f8 55%, #ded5f9 100%);
+  color: var(--da-burgundy);
+}
+
+/* Tablero Kanban estilo Eva 3 */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(230px, 1fr));
+  gap: 0.9rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.kanban-column {
+  background: #faf3f8;
+  border: 1px solid var(--da-border);
+  border-radius: 1rem;
+  padding: 0.75rem;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.kanban-column.drag-over {
+  background: #fdebf3;
+  border-color: #d9739f;
+}
+
+.kanban-column-header {
+  border-bottom: 1px solid var(--da-border);
+  padding-bottom: 0.55rem;
+}
+
+.kanban-card {
+  background: #ffffff;
+  border: 1px solid var(--da-border);
+  border-left: 4px solid var(--da-rose);
+  border-radius: 0.85rem;
+  padding: 0.75rem;
+  box-shadow: 0 3px 10px rgba(94, 58, 90, 0.05);
+  cursor: grab;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.kanban-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(94, 58, 90, 0.1);
+}
+
+.kanban-card.prioridad-URGENTE { border-left-color: #e11d48; }
+.kanban-card.prioridad-ALTA { border-left-color: #f59e0b; }
+.kanban-card.prioridad-NORMAL { border-left-color: #d9739f; }
+.kanban-card.prioridad-BAJA { border-left-color: #9e7be6; }
+
+/* Tablas y footer */
+.da-table thead {
+  background: #fbf4f9;
+  color: var(--da-burgundy);
+}
+
+.da-footer {
+  border-top: 1px solid var(--da-border);
+  color: var(--da-muted);
+}

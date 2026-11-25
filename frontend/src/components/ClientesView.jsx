@@ -98,16 +98,17 @@ export default function ClientesView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="da-card p-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-stone-900">Clientes · CRUD RESTful (JSON + JWT)</h2>
-          <p className="text-sm text-stone-500">
-            Endpoint <code className="bg-stone-100 px-1.5 py-0.5 rounded">/api/v1/clientes/</code> · Demostración GET, POST, PATCH y DELETE sobre RDS
+          <h2 className="text-xl font-extrabold text-[#462842]">Directorio de Clientes y Preferencias Alimentarias</h2>
+          <p className="text-xs md:text-sm text-[#7f6a7c] mt-0.5">
+            Administración CRUD completa (GET, POST, PATCH y DELETE) vía API RESTful en PostgreSQL RDS.
           </p>
         </div>
         <button
+          type="button"
           onClick={abrirCrear}
-          className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+          className="btn-dulce inline-flex items-center gap-2 px-4 py-2 text-xs md:text-sm cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Nuevo Cliente
         </button>
@@ -115,10 +116,10 @@ export default function ClientesView() {
 
       {feedback && (
         <div
-          className={`p-3 rounded-lg text-sm border ${
+          className={`p-3.5 rounded-2xl text-sm border ${
             feedback.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-red-50 border-red-200 text-red-700'
+              ? 'bg-[#eefbf4] border-[#bfe8d1] text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
           {feedback.text}
@@ -130,71 +131,78 @@ export default function ClientesView() {
           e.preventDefault()
           cargarClientes(search)
         }}
-        className="flex gap-2"
+        className="flex flex-wrap gap-2"
       >
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+        <div className="relative flex-1 min-w-[240px] max-w-md">
+          <Search className="w-4 h-4 text-[#9e7d9a] absolute left-3.5 top-3" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre, RUT o comuna..."
-            className="w-full pl-9 pr-3 py-2 border border-stone-300 rounded-lg text-sm bg-white"
+            className="w-full pl-10 pr-3.5 py-2 border border-[#e6d1e3] rounded-xl text-sm bg-white focus:ring-2 focus:ring-[#d9739f] outline-none"
           />
         </div>
-        <button type="submit" className="px-4 py-2 bg-stone-800 text-white text-sm rounded-lg hover:bg-stone-900">
+        <button type="submit" className="btn-dulce-outline px-4 py-2 text-sm cursor-pointer">
           Buscar
         </button>
       </form>
 
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-stone-50 text-stone-600 text-xs uppercase">
+      <div className="da-card overflow-x-auto">
+        <table className="da-table w-full text-sm text-left">
+          <thead className="text-[11px] uppercase font-bold">
             <tr>
               <th className="px-4 py-3">RUT</th>
               <th className="px-4 py-3">Nombre Completo</th>
               <th className="px-4 py-3">Tipo</th>
-              <th className="px-4 py-3">Correo / Teléfono</th>
-              <th className="px-4 py-3">Dirección</th>
+              <th className="px-4 py-3">Contacto</th>
+              <th className="px-4 py-3">Dirección / Alergias</th>
               <th className="px-4 py-3 text-right">Acciones CRUD</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100">
+          <tbody className="divide-y divide-[#f6edf4]">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-stone-500">Cargando clientes...</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-[#7f6a7c]">Cargando clientes...</td>
               </tr>
             ) : clientes.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-stone-500">Sin resultados.</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-[#7f6a7c]">Sin resultados.</td>
               </tr>
             ) : (
               clientes.map((c) => (
-                <tr key={c.id} className="hover:bg-stone-50">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold">{c.rut}</td>
-                  <td className="px-4 py-3 font-medium text-stone-900">{c.nombre_completo}</td>
+                <tr key={c.id} className="hover:bg-[#fdf8fb]">
+                  <td className="px-4 py-3 font-mono text-xs font-bold text-[#5e3a5a]">{c.rut}</td>
+                  <td className="px-4 py-3 font-bold text-[#462842]">{c.nombre_completo}</td>
                   <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-rose-50 text-rose-700">
+                    <span className="px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-[#fdf2f8] text-[#c55d8b] border border-[#f2d6e7]">
                       {c.tipo_cliente_display}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-stone-600">
+                  <td className="px-4 py-3 text-xs text-[#6d546a]">
                     <div>{c.email}</div>
                     <div>{c.telefono}</div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-stone-600">
-                    {c.direccion_habitual} ({c.comuna})
+                  <td className="px-4 py-3 text-xs text-[#6d546a] space-y-1">
+                    <div>{c.direccion_habitual} ({c.comuna})</div>
+                    {c.preferencias_alimentarias && (
+                      <span className="inline-block px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-semibold">
+                        ⚠️ {c.preferencias_alimentarias}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                     <button
+                      type="button"
                       onClick={() => abrirEditar(c)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-stone-300 rounded-md hover:bg-stone-100"
+                      className="btn-dulce-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs cursor-pointer"
                     >
                       <Pencil className="w-3.5 h-3.5" /> Editar
                     </button>
                     <button
+                      type="button"
                       onClick={() => eliminarCliente(c)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-red-200 text-red-700 rounded-md hover:bg-red-50"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-rose-200 text-rose-700 rounded-lg hover:bg-rose-50 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Eliminar
                     </button>
@@ -207,32 +215,34 @@ export default function ClientesView() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
-              <h3 className="font-bold text-stone-900">{editingId ? 'Editar Cliente (PATCH)' : 'Nuevo Cliente (POST)'}</h3>
-              <button onClick={() => setShowModal(false)} className="text-stone-400 hover:text-stone-700">
+        <div className="fixed inset-0 bg-[#462842]/45 backdrop-blur-[2px] flex items-center justify-center p-4 z-50">
+          <div className="da-card max-w-lg w-full overflow-hidden shadow-2xl">
+            <div className="px-5 py-4 bg-gradient-to-r from-[#fde4ee] to-[#f1e1f8] border-b border-[#ebd4e7] flex items-center justify-between">
+              <h3 className="font-extrabold text-[#462842]">
+                {editingId ? 'Editar Cliente (PATCH)' : 'Registrar Nuevo Cliente (POST)'}
+              </h3>
+              <button type="button" onClick={() => setShowModal(false)} className="text-[#5e3a5a] hover:text-[#462842] cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={guardarCliente} className="p-5 space-y-3 text-sm">
+            <form onSubmit={guardarCliente} className="p-5 space-y-3 text-sm bg-white">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-stone-700 mb-1">RUT *</label>
+                  <label className="block font-semibold text-[#5e3a5a] mb-1">RUT *</label>
                   <input
                     required
                     value={form.rut}
                     onChange={(e) => setForm({ ...form, rut: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                     placeholder="18.456.789-K"
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-stone-700 mb-1">Tipo</label>
+                  <label className="block font-semibold text-[#5e3a5a] mb-1">Tipo</label>
                   <select
                     value={form.tipo_cliente}
                     onChange={(e) => setForm({ ...form, tipo_cliente: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                   >
                     <option value="PARTICULAR">Cliente Particular</option>
                     <option value="EVENTO_NOVIOS">Matrimonio / Banquetería</option>
@@ -241,69 +251,69 @@ export default function ClientesView() {
                 </div>
               </div>
               <div>
-                <label className="block font-medium text-stone-700 mb-1">Nombre Completo *</label>
+                <label className="block font-semibold text-[#5e3a5a] mb-1">Nombre Completo *</label>
                 <input
                   required
                   value={form.nombre_completo}
                   onChange={(e) => setForm({ ...form, nombre_completo: e.target.value })}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-stone-700 mb-1">Email *</label>
+                  <label className="block font-semibold text-[#5e3a5a] mb-1">Email *</label>
                   <input
                     required
                     type="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-stone-700 mb-1">Teléfono *</label>
+                  <label className="block font-semibold text-[#5e3a5a] mb-1">Teléfono *</label>
                   <input
                     required
                     value={form.telefono}
                     onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-stone-700 mb-1">Dirección *</label>
+                  <label className="block font-semibold text-[#5e3a5a] mb-1">Dirección *</label>
                   <input
                     required
                     value={form.direccion_habitual}
                     onChange={(e) => setForm({ ...form, direccion_habitual: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-stone-700 mb-1">Comuna *</label>
+                  <label className="block font-semibold text-[#5e3a5a] mb-1">Comuna *</label>
                   <input
                     required
                     value={form.comuna}
                     onChange={(e) => setForm({ ...form, comuna: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block font-medium text-stone-700 mb-1">Restricciones / Alergias</label>
+                <label className="block font-semibold text-[#5e3a5a] mb-1">Restricciones / Alergias</label>
                 <input
                   value={form.preferencias_alimentarias}
                   onChange={(e) => setForm({ ...form, preferencias_alimentarias: e.target.value })}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-[#e6d1e3] rounded-xl bg-[#fdf8fb]"
                   placeholder="Sin gluten, sin trazas de maní..."
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-stone-300 rounded-lg">
+                <button type="button" onClick={() => setShowModal(false)} className="btn-dulce-outline px-4 py-2 cursor-pointer">
                   Cancelar
                 </button>
-                <button type="submit" className="px-4 py-2 bg-rose-600 text-white font-semibold rounded-lg hover:bg-rose-700">
+                <button type="submit" className="btn-dulce px-4 py-2 cursor-pointer">
                   Guardar en API
                 </button>
               </div>

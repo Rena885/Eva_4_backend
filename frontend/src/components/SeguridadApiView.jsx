@@ -29,62 +29,60 @@ export default function SeguridadApiView() {
   const bloqueados429 = rateResults.filter((r) => r.status === 429).length
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-5">
+      <div className="da-card p-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-stone-900">Evidencia Seguridad, JWT & Rate Limiting (EVA 4)</h2>
-          <p className="text-sm text-stone-500">
-            Herramienta práctica para demostrar JWT, Hashing Argon2, OpenAPI y Throttling de API Gateway en la defensa.
+          <h2 className="text-xl font-extrabold text-[#462842]">Seguridad API, JWT, Argon2 &amp; Rate Limiting (EVA 4)</h2>
+          <p className="text-xs md:text-sm text-[#7f6a7c] mt-0.5">
+            Verificación en vivo de claims JWT, hashing Argon2id en RDS, documentación OpenAPI y throttling de API Gateway.
           </p>
         </div>
         <a
           href={`${apiBase}/api/v1/docs/`}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-stone-900 text-white text-sm font-semibold rounded-lg hover:bg-stone-800"
+          className="btn-dulce inline-flex items-center gap-2 px-4 py-2 text-xs md:text-sm"
         >
           Abrir Swagger / OpenAPI <ExternalLink className="w-4 h-4" />
         </a>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* JWT Payload */}
-        <div className="bg-white rounded-xl border border-stone-200 p-5 shadow-sm space-y-3">
-          <div className="flex items-center gap-2 font-bold text-stone-800">
-            <KeyRound className="w-5 h-5 text-rose-600" /> Token JWT Activo (Payload Decodificado)
+        <div className="da-card p-5 space-y-3">
+          <div className="flex items-center gap-2 font-extrabold text-[#462842] text-sm">
+            <KeyRound className="w-5 h-5 text-[#d9739f]" /> Token JWT Activo (Payload Decodificado)
           </div>
-          <pre className="bg-stone-900 text-emerald-300 text-xs p-4 rounded-xl overflow-x-auto">
+          <pre className="bg-[#331e30] text-emerald-300 text-xs p-4 rounded-2xl overflow-x-auto">
             {JSON.stringify(jwtPayload, null, 2)}
           </pre>
         </div>
 
-        {/* Contraseñas y Hashing */}
-        <div className="bg-white rounded-xl border border-stone-200 p-5 shadow-sm space-y-3">
-          <div className="flex items-center gap-2 font-bold text-stone-800">
-            <ShieldAlert className="w-5 h-5 text-emerald-600" /> Identidad & Protección de Contraseñas (`/api/v1/auth/me/`)
+        <div className="da-card p-5 space-y-3">
+          <div className="flex items-center gap-2 font-extrabold text-[#462842] text-sm">
+            <ShieldAlert className="w-5 h-5 text-[#9e7be6]" /> Identidad &amp; Hasher (`/api/v1/auth/me/`)
           </div>
-          <pre className="bg-stone-900 text-sky-300 text-xs p-4 rounded-xl overflow-x-auto">
+          <pre className="bg-[#331e30] text-pink-200 text-xs p-4 rounded-2xl overflow-x-auto">
             {JSON.stringify(meInfo, null, 2)}
           </pre>
         </div>
       </div>
 
-      {/* Probador de Rate Limit API Gateway */}
-      <div className="bg-white rounded-xl border border-stone-200 p-5 shadow-sm space-y-4">
+      <div className="da-card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold text-stone-900 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-500" /> Prueba de Rate Limiting / Throttling (API Gateway)
+            <h3 className="font-extrabold text-[#462842] flex items-center gap-2">
+              <Zap className="w-5 h-5 text-[#e07a52]" /> Prueba de Rate Limiting / Throttling (API Gateway)
             </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Envía 12 solicitudes simultáneas a <code className="bg-stone-100 px-1 rounded">{apiBase}/api/v1/health/</code>.
-              Con API Gateway configurado (ej. rate=2 req/s, burst=5), observarás respuestas <strong>429 Too Many Requests</strong>.
+            <p className="text-xs text-[#7f6a7c] mt-0.5">
+              Envía 12 solicitudes simultáneas a <code className="bg-[#fdf2f8] text-[#5e3a5a] px-1.5 py-0.5 rounded">{apiBase}/api/v1/health/</code>.
+              Con throttling activo (rate=2 req/s, burst=5), observarás respuestas <strong>429 Too Many Requests</strong>.
             </p>
           </div>
           <button
+            type="button"
             onClick={probarRateLimit}
             disabled={testingRate}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm disabled:opacity-50"
+            className="btn-dulce px-4 py-2 text-xs md:text-sm cursor-pointer"
           >
             {testingRate ? 'Enviando ráfaga...' : 'Lanzar Ráfaga (12 requests)'}
           </button>
@@ -92,21 +90,21 @@ export default function SeguridadApiView() {
 
         {rateResults.length > 0 && (
           <div className="space-y-3">
-            <div className="flex gap-4 text-sm font-semibold">
+            <div className="flex flex-wrap gap-4 text-sm font-bold">
               <span className="text-emerald-700">200 OK: {exitosos}</span>
-              <span className="text-red-600">429 Too Many Requests: {bloqueados429}</span>
-              <span className="text-stone-600">Otros: {rateResults.length - exitosos - bloqueados429}</span>
+              <span className="text-rose-700">429 Too Many Requests: {bloqueados429}</span>
+              <span className="text-[#7f6a7c]">Otros: {rateResults.length - exitosos - bloqueados429}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
               {rateResults.map((r) => (
                 <div
                   key={r.intento}
-                  className={`p-2 rounded-lg border text-xs font-mono text-center ${
+                  className={`p-2 rounded-xl border text-xs font-mono text-center ${
                     r.status === 200
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      ? 'bg-[#eefbf4] border-[#bfe8d1] text-emerald-800'
                       : r.status === 429
-                      ? 'bg-red-50 border-red-300 text-red-700 font-bold'
-                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                      ? 'bg-rose-50 border-rose-300 text-rose-800 font-bold'
+                      : 'bg-[#fff7ea] border-[#f5deb3] text-amber-800'
                   }`}
                 >
                   #{r.intento} → HTTP {r.status} ({r.elapsedMs}ms)
